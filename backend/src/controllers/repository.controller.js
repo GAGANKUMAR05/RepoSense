@@ -1,6 +1,9 @@
 import repositoryModel from "../model/repository.model.js";
 import AdmZip from "adm-zip";
 import fs from "fs";
+import path from "path";
+import repositoryModel from "../model/repository.model.js"
+import fileModel from "../model/file.model.js";
 
 const createRepository = async(req,res)=>{
     try{
@@ -129,36 +132,155 @@ const deleteRepository = async (req,res)=>{
     
 }
 
-const uploadRepository = async (req,res)=>{
 
-    const file = req.file;
-    const {id} = req.params
-    
-    if(!file)
-    {
-        return res.status(400).json({
-            message:"upload valid file"
+
+
+
+
+const uploadRepository = async (req, res) => {
+
+    try {
+
+        // 1. Get uploaded file
+        const file = req.file;
+
+        // 2. Get repository ID from URL
+        const { id } = req.params;
+
+
+        // 3. Check whether file was uploaded
+        if (!file) {
+            return res.status(400).json({
+                message: "Please upload a valid file"
+            });
+        }
+
+
+        // 4. Find repository and verify ownership
+        const repo = await repositoryModel.findOne({
+            _id: id,
+            owner: req.user._id
+        });
+
+
+        // 5. Repository doesn't exist or doesn't belong to user
+        if (!repo) {
+            return res.status(404).json({
+                message: "Repository not found"
+            });
+        }
+
+
+        // 6. Open the uploaded ZIP file
+        const zip = new AdmZip(file.path);
+
+
+        // 7. Create extraction path
+        const extractPath = `./uploads/${repo._id}`;
+
+
+        // 8. Extract ZIP contents
+        zip.extractAllTo(extractPath, true);
+
+
+        // 9. Function to recursively find files
+        const getFiles = (directory) => {
+
+            const entries = fs.readdirSync(directory, {
+                withFileTypes: true
+            });
+
+            let files = [];
+
+
+            for (const entry of entries) {
+
+                const fullPath = path.join(directory, entry.name);
+
+
+                if (entry.isDirectory()) {
+
+                    const nestedFiles = getFiles(fullPath);
+
+                    files = files.concat(nestedFiles);
+
+                } else {
+
+                    files.push(fullPath);
+
+                }
+            }
+
+
+            return files;
+        };
+
+
+        // 10. Get all extracted files
+        const allFiles = getFiles(extractPath);
+
+
+        // 11. Ignore unnecessary files/folders
+        const ignored = [
+            "node_modules",
+            ".git",
+            "dist",
+            ".env"
+        ];
+
+
+        const usefulFiles = allFiles.filter((filePath) => {
+
+            return !ignored.some((item) =>
+                filePath.includes(`${path.sep}${item}${path.sep}`) ||
+                filePath.endsWith(`${path.sep}${item}`)
+            );
+
+        });
+
+
+        // 12. Read the contents of every useful file
+        const filesData = usefulFiles.map((filePath) => {
+
+            const content = fs.readFileSync(filePath, "utf-8");
+
+            return {
+                path: filePath,
+                content: content
+            };
+
+        });
+
+
+        const savedFiles = await fileModel.insertMany(
+            filesData.map((file) => ({
+                repository: repo._id,
+                path: file.path,
+                filename: path.basename(file.path),
+                language: path.extname(file.path).slice(1),
+                content: file.content
+            }))
+        );
+
+        res.status(201).json({
+            message:"File uploaded successfully",
+            filedata: filedata.length
         })
-    }
-    const repo= await repositoryModel.findOne({
-        _id: id,
-        owner : req.user._id
-    })
+    } catch (err) {
 
-    if(!repo)
-    {
-        return res.status(404).json({
-            message:"Repository not found"
-        })
+        console.error("Repository upload error:", err);
+
+        return res.status(500).json({
+            message: "Failed to process repository"
+        });
+
     }
 
-    const zip = new AdmZip(file.path);
+};
 
-    const extractPath = `./uploads/${repo._id}`;
 
-    zip.extractAllTo(extractPath, true);
 
-}
+
 
 export{
     createRepository,
