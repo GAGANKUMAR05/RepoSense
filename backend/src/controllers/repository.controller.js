@@ -136,8 +136,9 @@ const deleteRepository = async (req,res)=>{
 
 
 
-
 const uploadRepository = async (req, res) => {
+
+    let repo;
 
     try {
 
@@ -157,7 +158,7 @@ const uploadRepository = async (req, res) => {
 
 
         // 4. Find repository and verify ownership
-        const repo = await repositoryModel.findOne({
+        repo = await repositoryModel.findOne({
             _id: id,
             owner: req.user._id
         });
@@ -171,19 +172,24 @@ const uploadRepository = async (req, res) => {
         }
 
 
-        // 6. Open the uploaded ZIP file
+        // 6. Change repository status
+        repo.status = "PROCESSING";
+        await repo.save();
+
+
+        // 7. Open the uploaded ZIP file
         const zip = new AdmZip(file.path);
 
 
-        // 7. Create extraction path
+        // 8. Create extraction path
         const extractPath = `./uploads/${repo._id}`;
 
 
-        // 8. Extract ZIP contents
+        // 9. Extract ZIP contents
         zip.extractAllTo(extractPath, true);
 
 
-        // 9. Function to recursively find files
+        // 10. Function to recursively find files
         const getFiles = (directory) => {
 
             const entries = fs.readdirSync(directory, {
@@ -216,11 +222,11 @@ const uploadRepository = async (req, res) => {
         };
 
 
-        // 10. Get all extracted files
+        // 11. Get all extracted files
         const allFiles = getFiles(extractPath);
 
 
-        // 11. Ignore unnecessary files/folders
+        // 12. Ignore unnecessary files/folders
         const ignored = [
             "node_modules",
             ".git",
@@ -239,7 +245,7 @@ const uploadRepository = async (req, res) => {
         });
 
 
-        // 12. Read the contents of every useful file
+        // 13. Read the contents of every useful file
         const filesData = usefulFiles.map((filePath) => {
 
             const content = fs.readFileSync(filePath, "utf-8");
@@ -252,31 +258,65 @@ const uploadRepository = async (req, res) => {
         });
 
 
+        // 14. Save files in MongoDB
         const savedFiles = await fileModel.insertMany(
             filesData.map((file) => ({
+
                 repository: repo._id,
+
                 path: file.path,
+
                 filename: path.basename(file.path),
+
                 language: path.extname(file.path).slice(1),
+
                 content: file.content
+
             }))
         );
 
-        res.status(201).json({
-            message:"File uploaded successfully",
-            filedata: filedata.length
-        })
+
+        // 15. Repository processing completed
+        repo.status = "READY";
+        await repo.save();
+
+
+        // 16. Send success response
+        return res.status(201).json({
+
+            message: "Repository uploaded successfully",
+
+            totalFiles: savedFiles.length
+
+        });
+
+
     } catch (err) {
 
         console.error("Repository upload error:", err);
 
+
+        // Mark repository as failed
+        if (repo) {
+
+            repo.status = "FAILED";
+
+            await repo.save();
+
+        }
+
+
         return res.status(500).json({
+
             message: "Failed to process repository"
+
         });
 
     }
 
 };
+
+
 
 
 

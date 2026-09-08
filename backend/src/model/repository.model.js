@@ -13,6 +13,11 @@ const repositorySchema = mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
         required:true
+    },
+    status:{
+        type:String,
+        enum: ["UPLOADING", "PROCESSING", "READY", "FAILED"],
+        default: "UPLOADING"
     }
 },{timestamps:true})
 
