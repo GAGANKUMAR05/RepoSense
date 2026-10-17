@@ -18,6 +18,10 @@ const repositorySchema = mongoose.Schema({
         type:String,
         enum: ["UPLOADING", "PROCESSING", "READY", "FAILED"],
         default: "UPLOADING"
+    },
+    fileCount: {
+        type: Number,
+        default: 0
     }
 },{timestamps:true})
 
