@@ -48,7 +48,7 @@ const registerController = async(req,res)=>{
             email
         }
     })
-}
+};
 
 const loginController = async(req,res)=>{
     const {email,password} = req.body;
@@ -98,7 +98,7 @@ const loginController = async(req,res)=>{
         }
     })
 
-}
+};
 
 
 const logoutController = async (req, res) => {
@@ -120,7 +120,7 @@ const meController = async(req,res)=>{
         }
     })
 
-}
+};
 
 
 export {
